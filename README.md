@@ -1,63 +1,52 @@
 # nix-config
 
-NixOS + home-manager flake for a ThinkPad T480s, mostly a copy of
-[Kranzes/nix-config](https://github.com/Kranzes/nix-config) (tamarin) flattened
-for one host and one user.
+NixOS and home-manager flake for a ThinkPad T480s, flattened from
+[Kranzes/nix-config](https://github.com/Kranzes/nix-config).
 
-- **nixos-unstable**, latest Nix, srvos networking, perlless profile (perl still allowed)
-- **disko**: disko's `luks-btrfs-subvolumes` example (LUKS2 → btrfs `/`, `/home`, `/nix`, swapfile)
-- **nixos-facter** for hardware detection instead of `hardware-configuration.nix`
-- **lanzaboote**: Secure Boot keys are generated and enrolled automatically,
-  then the LUKS volume is re-sealed to a `systemd-pcrlock` (measured boot) policy
-- **Hyprland** (UWSM, Lua config) + **noctalia** (legacy-v4) + regreet, catppuccin everywhere
-- nixvim, ghostty, firefox (Betterfox + addons), CUPS printing
-- **claude-code** + herdr from [llm-agents.nix](https://github.com/numtide/llm-agents.nix)
+- disko: LUKS2 with ext4. The TPM unlocks it, with a recovery key as the only
+  fallback.
+- lanzaboote: Secure Boot and a `systemd-pcrlock` measured boot policy, both set
+  up automatically.
+- nixos-facter instead of `hardware-configuration.nix`.
+- Hyprland, noctalia v5 and noctalia-greeter, themed Catppuccin Macchiato.
 
-```
-flake.nix   inputs, nixosConfigurations.t480s, treefmt (`nix fmt`)
-nixos/      system modules (hardware.nix = disko + facter + lanzaboote)
-home/       home-manager config for shahar
-```
-
-## Fresh install
+## Install
 
 ### 1. Firmware (F1 at boot)
 
-- Update the BIOS first (Thunderbolt firmware ≥ 1.50 avoids the T480s TB3 bug).
-- *Security → Security Chip*: enable TPM 2.0.
-- *Security → Secure Boot*: **Reset to Setup Mode** and **Clear All Secure Boot
-  Keys**. Leave Secure Boot enabled. It stays in Setup Mode until the keys are
-  enrolled.
-- Boot the NixOS unstable installer ISO from USB. If the firmware won't boot it
-  while in Setup Mode, disable Secure Boot for now and turn it back on after
-  step 4.
+- Update the BIOS. Thunderbolt firmware 1.50 or newer avoids the T480s
+  Thunderbolt bug.
+- Enable TPM 2.0 in *Security → Security Chip*.
+- In *Security → Secure Boot*, choose *Reset to Setup Mode* and *Clear All
+  Secure Boot Keys*. Leave Secure Boot enabled.
+- Boot the NixOS unstable installer. If it won't boot in Setup Mode, disable
+  Secure Boot and turn it back on before the first boot after step 3. Until
+  Secure Boot is on, the temporary TPM slot unlocks the disk for any OS.
 
-### 2. Hardware report + partition
+### 2. Partition
 
 ```console
 $ git clone https://github.com/shaharulo/nix-config && cd nix-config
 $ sudo nix --extra-experimental-features 'nix-command flakes' \
     run nixpkgs#nixos-facter -- -o nixos/facter.json
-$ git add nixos/facter.json   # flakes only see tracked files
-$ sudo nix --extra-experimental-features 'nix-command flakes' \
-    run github:nix-community/disko/latest -- --mode destroy,format,mount --flake .#t480s
+$ git add nixos/facter.json
+$ sudo $(nix --extra-experimental-features 'nix-command flakes' build --no-link --print-out-paths \
+    .#nixosConfigurations.t480s.config.system.build.destroyFormatMount)/bin/disko-destroy-format-mount
 ```
 
-disko asks for the LUKS passphrase. Keep it: it stays as the fallback unlock
-method.
+disko asks for a throwaway passphrase, then prints the recovery key. Save it.
+It's the only way in if the TPM refuses. disko then adds a temporary TPM slot
+for the first boots and wipes the passphrase.
 
-### 3. Bootstrap TPM unlock
-
-The automatic measured-boot enrollment needs an existing TPM2 keyslot to unlock
-the disk without you. Add a temporary one that isn't bound to any PCRs. It gets
-replaced on the second boot:
+To remount after an installer reboot:
 
 ```console
-$ sudo systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs= /dev/disk/by-partlabel/disk-main-luks
-$ sudo systemd-cryptenroll --recovery-key /dev/disk/by-partlabel/disk-main-luks  # optional, write it down
+$ sudo cryptsetup open /dev/disk/by-partlabel/disk-main-luks crypted   # recovery key
+$ sudo mount /dev/mapper/crypted /mnt
+$ sudo mount /dev/disk/by-partlabel/disk-main-ESP /mnt/boot
 ```
 
-### 4. Install
+### 3. Install
 
 ```console
 $ sudo nixos-install --flake .#t480s --no-root-passwd
@@ -66,43 +55,23 @@ $ sudo cp -r . /mnt/home/shahar/nix-config && sudo nixos-enter --root /mnt -c 'c
 $ reboot
 ```
 
-The first generation is installed unsigned.
-
-### 5. Automatic provisioning (two automatic reboots)
-
-1. **Boot 1:** `generate-sb-keys` creates keys in `/var/lib/sbctl`.
-   `prepare-sb-auto-enroll` stages them on the ESP, re-signs everything and
-   reboots.
-2. **Boot 2:** systemd-boot enrolls the keys and Secure Boot is now enforcing.
-   `auto-cryptenroll` wipes the bootstrap TPM2 slot, re-enrolls it against the
-   `systemd-pcrlock` policy (PCRs 0, 2, 3, 4, 7) and reboots.
-3. **Boot 3:** the disk unlocks only if firmware, Secure Boot state and the
-   signed lanzaboote stub match the policy. Every `nixos-rebuild` updates the
-   policy automatically.
-
-Check the result:
+The laptop reboots twice on its own. The first boot creates and stages the
+Secure Boot keys. The second enrolls them and seals the disk to the TPM policy
+(PCRs 0, 2, 3, 4 and 7). Then check:
 
 ```console
-$ bootctl status | grep 'Secure Boot'      # enabled (user)
-$ sbctl status
-$ systemd-cryptenroll /dev/disk/by-partlabel/disk-main-luks   # password + tpm2 (+ recovery)
+$ bootctl status | grep 'Secure Boot'   # enabled (user)
+$ systemd-cryptenroll /dev/disk/by-partlabel/disk-main-luks   # tpm2 + recovery
 ```
 
-If the TPM refuses to unlock (for example after a firmware update), the
-passphrase prompt appears and the policy is rebuilt on that boot.
-
-Optional, for attended unlock: add a PIN to the TPM slot with
-`systemd-cryptenroll --wipe-slot=tpm2 --tpm2-device=auto --tpm2-with-pin=true --tpm2-pcrlock=/var/lib/systemd/pcrlock.json /dev/disk/by-partlabel/disk-main-luks`.
-
-## Day to day
+Create the SSH key, which also signs git commits, then commit
+`nixos/facter.json`:
 
 ```console
-$ nixos-rebuild switch --flake ~/nix-config#t480s --elevate=run0
-$ nix flake update && nix fmt
+$ ssh-tpm-keygen
 ```
 
-`sudo` is replaced with `run0`, and a `sudo` shim is kept. Keybinds are in
-`home/hyprland.nix`. `SUPER+Space` opens fuzzel, `SUPER+comma` opens noctalia
-settings and `SUPER+Return` opens a terminal.
+## BIOS updates
 
-Commit `nixos/facter.json` once generated.
+Use `fwupdmgr update`. fwupd relaxes the TPM policy for the update, so the disk
+still unlocks. Flashing any other way asks for the recovery key once.

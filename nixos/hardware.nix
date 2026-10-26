@@ -1,23 +1,17 @@
 {
   inputs,
+  config,
   pkgs,
   lib,
   ...
 }:
 
-let
-  btrfsOpts = [
-    "compress=zstd"
-    "noatime"
-  ];
-in
 {
   imports = [
     inputs.disko.nixosModules.disko
     inputs.lanzaboote.nixosModules.lanzaboote
   ];
 
-  # Based on disko's example/luks-btrfs-subvolumes.nix.
   disko.devices.disk.main = {
     type = "disk";
     device = "/dev/nvme0n1";
@@ -25,7 +19,7 @@ in
       type = "gpt";
       partitions = {
         ESP = {
-          size = "512M";
+          size = "1G";
           type = "EF00";
           content = {
             type = "filesystem";
@@ -39,28 +33,23 @@ in
           content = {
             type = "luks";
             name = "crypted";
-            settings.allowDiscards = true;
+            settings = {
+              allowDiscards = true;
+              crypttabExtraOpts = [ "tpm2-device=auto" ];
+            };
+            # The passphrase is only used during install.
+            askPassword = true;
+            enrollRecovery = true;
+            postCreateHook = ''
+              if systemd-cryptenroll "$device" | grep -qw password; then
+                systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs= --wipe-slot=password \
+                  --unlock-key-file=<(set +x; echo -n "$password"; set -x) "$device"
+              fi
+            '';
             content = {
-              type = "btrfs";
-              extraArgs = [ "-f" ];
-              subvolumes = {
-                "/root" = {
-                  mountpoint = "/";
-                  mountOptions = btrfsOpts;
-                };
-                "/home" = {
-                  mountpoint = "/home";
-                  mountOptions = btrfsOpts;
-                };
-                "/nix" = {
-                  mountpoint = "/nix";
-                  mountOptions = btrfsOpts;
-                };
-                "/swap" = {
-                  mountpoint = "/.swapvol";
-                  swap.swapfile.size = "16G";
-                };
-              };
+              type = "filesystem";
+              format = "ext4";
+              mountpoint = "/";
             };
           };
         };
@@ -68,7 +57,13 @@ in
     };
   };
 
-  # Generated on the machine with `nixos-facter`, see README.
+  swapDevices = [
+    {
+      device = "/var/lib/swapfile";
+      size = 16 * 1024;
+    }
+  ];
+
   hardware.facter.reportPath = lib.mkIf (builtins.pathExists ./facter.json) ./facter.json;
 
   boot = {
@@ -83,6 +78,7 @@ in
       configurationLimit = 4;
       measuredBoot = {
         enable = true;
+        # fwupd relaxes PCRs 0 and 2 for BIOS updates. PCR 1 is flaky.
         pcrs = [
           0
           2
@@ -92,7 +88,7 @@ in
         ];
         autoCryptenroll = {
           enable = true;
-          device = "/dev/disk/by-partlabel/disk-main-luks";
+          inherit (config.boot.initrd.luks.devices.crypted) device;
           autoReboot = true;
         };
       };

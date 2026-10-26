@@ -26,6 +26,7 @@
     ./editors.nix
     ./terminal.nix
     ./ssh.nix
+    ./ssh-tpm-agent.nix
     ./git.nix
     ./hyprland.nix
     ./noctalia.nix

@@ -1,10 +1,11 @@
 { config, pkgs, ... }:
 
 {
-  # For changing display brightness.
   environment.systemPackages = [ pkgs.brightnessctl ];
 
-  # For WiFi.
+  # VA-API for the Intel UHD 620.
+  hardware.graphics.extraPackages = [ pkgs.intel-media-driver ];
+
   networking.networkmanager.enable = true;
 
   hardware.bluetooth = {

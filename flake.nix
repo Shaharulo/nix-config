@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.zst";
     flake-parts = {
       url = "github:hercules-ci/flake-parts";
       inputs.nixpkgs-lib.follows = "nixpkgs";
@@ -17,9 +17,8 @@
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    lanzaboote.url = "github:nix-community/lanzaboote";
-    treefmt-nix = {
-      url = "github:numtide/treefmt-nix";
+    lanzaboote = {
+      url = "github:nix-community/lanzaboote";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     firefox-addons = {
@@ -39,14 +38,13 @@
       url = "github:numtide/llm-agents.nix";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.flake-parts.follows = "flake-parts";
-      inputs.treefmt-nix.follows = "treefmt-nix";
     };
     noctalia = {
-      url = "github:noctalia-dev/noctalia-shell/legacy-v4";
+      url = "github:noctalia-dev/noctalia";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     mic92-noctalia-plugins = {
-      url = "github:Mic92/noctalia-plugins/228af6bdacba987d962c72d8b2fb35e4549bb09f";
+      url = "github:Mic92/noctalia-plugins";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -56,20 +54,58 @@
     inputs.flake-parts.lib.mkFlake { inherit inputs; } {
       systems = [ "x86_64-linux" ];
 
-      imports = [ inputs.treefmt-nix.flakeModule ];
-
       flake.nixosConfigurations.t480s = inputs.nixpkgs.lib.nixosSystem {
         specialArgs = { inherit inputs; };
         modules = [ ./nixos ];
       };
 
-      perSystem.treefmt = {
-        projectRootFile = "flake.nix";
-        programs = {
-          nixfmt.enable = true;
-          deadnix.enable = true;
-          statix.enable = true;
+      perSystem =
+        {
+          config,
+          pkgs,
+          lib,
+          ...
+        }:
+        {
+          checks.formatting = config.formatter.check inputs.self;
+
+          devShells.default = pkgs.mkShellNoCC { packages = [ config.formatter ]; };
+
+          formatter = pkgs.treefmt.withConfig {
+            runtimeInputs = with pkgs; [
+              nixfmt
+              deadnix
+            ];
+            settings = {
+              tree-root-file = "flake.nix";
+              on-unmatched = "info";
+              formatter = {
+                nixfmt = {
+                  command = "nixfmt";
+                  priority = 3;
+                  includes = [ "*.nix" ];
+                };
+                deadnix = {
+                  command = "deadnix";
+                  priority = 1;
+                  options = [ "--edit" ];
+                  includes = [ "*.nix" ];
+                };
+                # Lower priority runs first. statix only takes one file at a time.
+                statix = {
+                  priority = 2;
+                  command = lib.getExe (
+                    pkgs.writeShellApplication {
+                      name = "statix-fix";
+                      runtimeInputs = [ pkgs.statix ];
+                      text = ''for f in "$@"; do statix fix "$f"; done'';
+                    }
+                  );
+                  includes = [ "*.nix" ];
+                };
+              };
+            };
+          };
         };
-      };
     };
 }

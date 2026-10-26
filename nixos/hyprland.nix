@@ -1,19 +1,14 @@
-{ pkgs, ... }:
 {
   programs.hyprland = {
     enable = true;
     withUWSM = true;
   };
 
-  services.displayManager.regreet = {
+  services.displayManager.noctalia-greeter = {
     enable = true;
-    font = {
-      package = pkgs.roboto;
-      name = "Roboto";
-    };
+    # noctalia syncs its theme to the greeter without a password prompt.
+    passwordlessSyncUsers = [ "shahar" ];
   };
 
   security.pam.services.hyprlock = { };
-
-  services.gnome.evolution-data-server.enable = true;
 }

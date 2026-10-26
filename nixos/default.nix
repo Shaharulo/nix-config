@@ -1,10 +1,14 @@
-{ inputs, modulesPath, ... }:
+{
+  inputs,
+  lib,
+  modulesPath,
+  ...
+}:
 
 {
   imports = [
     "${modulesPath}/profiles/perlless.nix"
     inputs.home-manager.nixosModules.default
-    ./audio.nix
     ./hardware.nix
     ./hyprland.nix
     ./laptop.nix
@@ -17,7 +21,7 @@
   ];
 
   # Keep the rest of the perlless profile, but don't fail the build on perl.
-  system.forbiddenDependenciesRegexes = [ ];
+  system.forbiddenDependenciesRegexes = lib.mkForce [ ];
 
   home-manager = {
     useGlobalPkgs = true;

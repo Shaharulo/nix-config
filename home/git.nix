@@ -1,13 +1,16 @@
 {
   pkgs,
-  lib,
-  config,
   ...
 }:
 
 {
   programs.git = {
     enable = true;
+    signing = {
+      format = "ssh";
+      key = "~/.ssh/id_ecdsa.pub";
+      signByDefault = true;
+    };
     ignores = [
       "*.swp"
       "result"
@@ -17,9 +20,6 @@
       user.email = "shahar.joselevich@gmail.com";
       init.defaultBranch = "master";
       push.autoSetupRemote = true;
-      credential."https://api.github.com".helper = "${pkgs.writeShellScript "gh-api-credential" ''
-        ${pkgs.gnused}/bin/sed 's/^host=api\.github\.com$/host=github.com/' | ${lib.getExe config.programs.gh.package} auth git-credential "$@"
-      ''}";
     };
   };
 

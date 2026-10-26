@@ -80,7 +80,7 @@ in
         "hyprland.start"
         (mkLuaInline ''
           function()
-            hl.exec_cmd("noctalia-shell")
+            hl.exec_cmd("noctalia")
           end
         '')
       ];
@@ -96,16 +96,16 @@ in
           {
             "SUPER + Return" = ''hl.dsp.exec_cmd("ghostty +new-window")'';
             "SUPER + Space" = ''hl.dsp.exec_cmd("fuzzel")'';
-            "SUPER + comma" = ''hl.dsp.exec_cmd("noctalia-shell ipc call settings toggle")'';
+            "SUPER + comma" = ''hl.dsp.exec_cmd("noctalia msg settings-toggle")'';
             "SUPER + W" = "hl.dsp.window.close()";
             "SUPER + SHIFT + W" = "hl.dsp.window.kill()";
             "SUPER + ALT + Q" = "hl.dsp.exit()";
             "ALT + 1" = ''hl.dsp.exec_cmd("firefox")'';
             "ALT + 2" = ''hl.dsp.exec_cmd("discord")'';
             "ALT + 3" = ''hl.dsp.exec_cmd("nemo")'';
-            "XF86AudioPlay" = ''hl.dsp.exec_cmd("noctalia-shell ipc call media playPause")'';
-            "XF86AudioPrev" = ''hl.dsp.exec_cmd("noctalia-shell ipc call media previous")'';
-            "XF86AudioNext" = ''hl.dsp.exec_cmd("noctalia-shell ipc call media next")'';
+            "XF86AudioPlay" = ''hl.dsp.exec_cmd("noctalia msg media toggle")'';
+            "XF86AudioPrev" = ''hl.dsp.exec_cmd("noctalia msg media previous")'';
+            "XF86AudioNext" = ''hl.dsp.exec_cmd("noctalia msg media next")'';
             "SUPER + H" = ''hl.dsp.focus({ direction = "left" })'';
             "SUPER + J" = ''hl.dsp.focus({ direction = "down" })'';
             "SUPER + K" = ''hl.dsp.focus({ direction = "up" })'';
@@ -149,7 +149,7 @@ in
           {
             _args = [
               "XF86AudioRaiseVolume"
-              (mkLuaInline ''hl.dsp.exec_cmd("noctalia-shell ipc call volume increase")'')
+              (mkLuaInline ''hl.dsp.exec_cmd("noctalia msg volume-up")'')
               {
                 locked = true;
                 repeating = true;
@@ -159,7 +159,7 @@ in
           {
             _args = [
               "XF86AudioLowerVolume"
-              (mkLuaInline ''hl.dsp.exec_cmd("noctalia-shell ipc call volume decrease")'')
+              (mkLuaInline ''hl.dsp.exec_cmd("noctalia msg volume-down")'')
               {
                 locked = true;
                 repeating = true;
@@ -169,7 +169,7 @@ in
           {
             _args = [
               "XF86MonBrightnessUp"
-              (mkLuaInline ''hl.dsp.exec_cmd("noctalia-shell ipc call brightness increase")'')
+              (mkLuaInline ''hl.dsp.exec_cmd("noctalia msg brightness-up")'')
               {
                 locked = true;
                 repeating = true;
@@ -179,7 +179,7 @@ in
           {
             _args = [
               "XF86MonBrightnessDown"
-              (mkLuaInline ''hl.dsp.exec_cmd("noctalia-shell ipc call brightness decrease")'')
+              (mkLuaInline ''hl.dsp.exec_cmd("noctalia msg brightness-down")'')
               {
                 locked = true;
                 repeating = true;
@@ -217,7 +217,7 @@ in
           {
             _args = [
               "XF86AudioMute"
-              (mkLuaInline ''hl.dsp.exec_cmd("noctalia-shell ipc call volume muteOutput")'')
+              (mkLuaInline ''hl.dsp.exec_cmd("noctalia msg volume-mute")'')
               { locked = true; }
             ];
           }
@@ -242,16 +242,21 @@ in
           match.class = "^(org\\.keepassxc\\.KeePassXC)$";
           no_screen_share = true;
         }
+        {
+          match.class = "^(dev\\.noctalia\\.Noctalia)$";
+          float = true;
+          size = [
+            1080
+            920
+          ];
+        }
       ];
     };
   };
 
   programs.hyprlock = {
     enable = true;
-    settings = {
-      animations.enabled = false;
-      auth.fingerprint.enabled = true;
-    };
+    settings.animations.enabled = false;
   };
 
   services.hypridle = {

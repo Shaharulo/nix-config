@@ -12,10 +12,5 @@
       enable = true;
       options.font = "JetBrainsMonoNL Nerd Font 8";
     };
-
-    gpg = {
-      enable = true;
-      scdaemonSettings.disable-ccid = true;
-    };
   };
 }

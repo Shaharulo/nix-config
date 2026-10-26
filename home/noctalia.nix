@@ -1,14 +1,35 @@
-{ inputs, pkgs, ... }:
+{
+  inputs,
+  config,
+  lib,
+  ...
+}:
+
 {
   imports = [ inputs.noctalia.homeModules.default ];
 
-  programs.noctalia-shell = {
+  programs.noctalia = {
     enable = true;
-    package = inputs.noctalia.packages.${pkgs.stdenv.hostPlatform.system}.default.override {
-      calendarSupport = true;
+    settings = {
+      theme = {
+        # noctalia downloads this palette from api.noctalia.dev on first start.
+        source = "community";
+        community_palette =
+          let
+            inherit (config.catppuccin) flavor accent;
+          in
+          "Catppuccin ${lib.toSentenceCase flavor} ${lib.toSentenceCase accent}";
+      };
+      plugins = {
+        enabled = [ "mic92/ssh-askpass" ];
+        source = [
+          {
+            name = "mic92";
+            kind = "path";
+            location = "${inputs.mic92-noctalia-plugins}";
+          }
+        ];
+      };
     };
   };
-
-  xdg.configFile."noctalia/plugins/ssh-askpass".source =
-    "${inputs.mic92-noctalia-plugins}/ssh-askpass";
 }
